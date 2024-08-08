@@ -1,9 +1,0 @@
-{
-    "version": 2,
-    "builds": [
-        {"src": "text_prediction.py", "use": "@vercel/python"}
-    ],
-    "routes": [
-        {"src": "/(.*)", "dest": "text_prediction.py"}
-    ]
-}
