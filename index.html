@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Improved Text Suggestion</title>
+    <style>
+        .suggestion-box {
+            position: relative;
+            display: inline-block;
+            width: 100%;
+        }
+        .input-area {
+            width: 100%;
+            min-height: 100px;
+            border: 1px solid #ccc;
+            padding: 10px;
+            font-size: 16px;
+            outline: none;
+            white-space: pre-wrap;
+        }
+        .suggestion-text {
+            position: absolute;
+            color: gray;
+            pointer-events: none;
+            opacity: 0.5;
+        }
+    </style>
+    <script>
+        let lastCaretPosition = 0;
+        let currentSuggestions = [];
+        let suggestionTimeout;
+
+        function getCaretPosition(element) {
+            const selection = window.getSelection();
+            if (selection.rangeCount > 0) {
+                const range = selection.getRangeAt(0);
+                return range.endOffset;
+            }
+            return 0;
+        }
+
+        function setCaretPosition(element, position) {
+            const range = document.createRange();
+            const selection = window.getSelection();
+            range.setStart(element.childNodes[0], position);
+            range.collapse(true);
+            selection.removeAllRanges();
+            selection.addRange(range);
+        }
+
+        async function getSuggestions() {
+            const inputElement = document.getElementById('inputText');
+            const input = inputElement.innerText;
+            lastCaretPosition = getCaretPosition(inputElement);
+            
+            const response = await fetch('/suggest', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ prompt: input })
+            });
+            const data = await response.json();
+            currentSuggestions = data.suggestions;
+            
+            displaySuggestion();
+        }
+
+        function displaySuggestion() {
+            const inputElement = document.getElementById('inputText');
+            const suggestionElement = document.getElementById('suggestion');
+            
+            if (currentSuggestions.length > 0) {
+                const text = inputElement.innerText.slice(0, lastCaretPosition);
+                const words = text.split(/\s+/);
+                const currentWord = words[words.length - 1] || '';
+                let suggestion = currentSuggestions[0];
+                
+                // If the current word is a partial match, find the first suggestion that completes it
+                for (let s of currentSuggestions) {
+                    if (s.toLowerCase().startsWith(currentWord.toLowerCase()) && s.toLowerCase() !== currentWord.toLowerCase()) {
+                        suggestion = s;
+                        break;
+                    }
+                }
+                
+                if (suggestion.toLowerCase().startsWith(currentWord.toLowerCase()) && suggestion.toLowerCase() !== currentWord.toLowerCase()) {
+                    suggestionElement.innerText = suggestion.slice(currentWord.length);
+                    const rect = getCaretCoordinates(inputElement, lastCaretPosition);
+                    suggestionElement.style.left = `${rect.left}px`;
+                    suggestionElement.style.top = `${rect.top}px`;
+                    suggestionElement.style.display = 'inline';
+                } else {
+                    suggestionElement.style.display = 'none';
+                }
+            } else {
+                suggestionElement.style.display = 'none';
+            }
+        }
+
+        function getCaretCoordinates(element, position) {
+            const range = document.createRange();
+            const sel = window.getSelection();
+            range.setStart(element.childNodes[0], position);
+            range.collapse(true);
+            sel.removeAllRanges();
+            sel.addRange(range);
+            const rect = range.getBoundingClientRect();
+            return {
+                left: rect.left + window.pageXOffset,
+                top: rect.top + window.pageYOffset
+            };
+        }
+
+        function insertSuggestion() {
+            const inputElement = document.getElementById('inputText');
+            const suggestionElement = document.getElementById('suggestion');
+            if (suggestionElement.innerText) {
+                const text = inputElement.innerText;
+                const words = text.slice(0, lastCaretPosition).split(/\s+/);
+                const currentWord = words[words.length - 1] || '';
+                const newText = text.slice(0, lastCaretPosition - currentWord.length) + currentSuggestions[0] + ' ' + text.slice(lastCaretPosition);
+                inputElement.innerText = newText;
+                setCaretPosition(inputElement, lastCaretPosition - currentWord.length + currentSuggestions[0].length + 1);
+                suggestionElement.innerText = '';
+                handleInput();
+            }
+        }
+
+        function handleInput() {
+            clearTimeout(suggestionTimeout);
+            suggestionTimeout = setTimeout(() => {
+                getSuggestions();
+            }, 200);  // Delay of 200ms to reduce API calls
+        }
+
+        function handleKeyDown(event) {
+            if (event.key === 'Tab' && document.getElementById('suggestion').innerText) {
+                event.preventDefault();
+                insertSuggestion();
+            }
+        }
+    </script>
+</head>
+<body>
+    <div class="suggestion-box">
+        <div id="inputText" class="input-area" contenteditable="true" oninput="handleInput()" onkeydown="handleKeyDown(event)"></div>
+        <span id="suggestion" class="suggestion-text"></span>
+    </div>
+</body>
+</html>
