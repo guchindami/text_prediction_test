@@ -1,4 +1,5 @@
 Flask==2.3.3
 transformers==4.32.0
 torch==2.4.0
+tokenizers==0.13.3
 
